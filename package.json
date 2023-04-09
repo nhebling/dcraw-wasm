@@ -1,0 +1,37 @@
+{
+	"name": "dcraw-wasm",
+	"version": "0.0.1",
+	"private": true,
+	"description": "WebAssembly to convert RAW camera images",
+	"repository": {
+		"type": "git",
+		"url": "https://github.com/nhebling/dcraw-wasm"
+	},
+	"homepage": "https://github.com/nhebling/dcraw-wasm#readme",
+	"author": "Niels Hebling",
+	"license": "SEE LICENSE IN LICENSE",
+	"keywords": [
+		"wasm",
+		"dcraw",
+		"raw",
+		"images",
+		"camera",
+		"dslr",
+		"dslm"
+	],
+	"scripts": {
+		"build": "make all",
+		"start": "npm run copy && emrun --browser open ./demo/index.html",
+		"copy": "npm run copy:module && npm run copy:bin",
+		"copy:bin": "mkdir -p ./demo/bin && cp -R ./bin/* ./demo/bin/",
+		"copy:module": "mkdir -p ./demo && cp -R ./src/dcraw-wasm.js ./demo/",
+		"lint": "eslint ."
+	},
+	"devDependencies": {
+		"eslint": "^8.38.0",
+		"eslint-config-prettier": "^8.8.0",
+		"eslint-plugin-prettier": "^4.2.1",
+		"prettier": "^2.8.7",
+		"rimraf": "^4.4.1"
+	}
+}
