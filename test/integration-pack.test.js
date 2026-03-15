@@ -93,7 +93,7 @@ async function main() {
 		await rawDecoder.init({
 			locateFile: (wasmFileName) => path.join(packageRoot, 'bin', wasmFileName),
 		});
-		const metadataResult = rawDecoder.readMetadata(rawBuffer);
+		const metadataResult = await rawDecoder.readMetadata(rawBuffer);
 		assert.equal(typeof metadataResult.rawText, 'string');
 		assert.ok(metadataResult.rawText.trim().length > 0, 'Expected typed metadata output from packed module');
 

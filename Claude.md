@@ -22,10 +22,11 @@
 
 1. `emcc` compiles `src/lib/dcraw.c` into modular ES module output (`bin/dcraw.js`, WASM enabled).
 2. `src/dcraw-wasm.js` dynamically loads the Emscripten module factory from either `./bin/dcraw.js` (demo copy layout) or `../bin/dcraw.js` (npm package layout), initializes it asynchronously, and binds to Emscripten `FS`.
-3. `src/public/raw-decoder.ts` provides the typed `RawDecoder` facade and resolves internal runtime imports for both package (`../src/dcraw-wasm.js`) and demo copy layout (`../dcraw-wasm.js`).
-4. `src/public/metadata.ts` parses raw metadata text into typed/stable metadata properties.
-5. `src/public/browser.ts` and `src/public/node.ts` implement convenience layers for browser file/drop flows and Node batch processing.
-6. At runtime, RAW file bytes are written to MEMFS, `_runMain` (aliased `main`) is invoked with mapped CLI-like args, and output is read from stdout or generated thumbnail file.
+3. `src/public/raw-decoder.ts` provides the typed `RawDecoder` facade. Each decode method (`readMetadata`, `extractThumbnail`, `analyze`) is async and creates its own fresh `DcrawWasm` instance, uses it for exactly one operation, then discards it. `init()` is optional and stores module options forwarded to all isolated runs. `runInternal()` is an advanced escape hatch that requires `init()` and is explicitly one-shot.
+4. `src/public/isolated-analysis.ts` delegates to `RawDecoder.analyze()` directly, since isolation is now handled inside `RawDecoder`.
+5. `src/public/metadata.ts` parses raw metadata text into typed/stable metadata properties.
+6. `src/public/browser.ts` and `src/public/node.ts` implement convenience layers for browser file/drop flows and Node batch processing.
+7. At runtime, RAW file bytes are written to MEMFS, `_runMain` (aliased `main`) is invoked with mapped CLI-like args, and output is read from stdout or generated thumbnail file.
 
 ## Build And Run Commands
 
@@ -83,13 +84,13 @@ Package exports:
 Main public API (`dcraw-wasm`):
 
 - `new RawDecoder()`
-- `await rawDecoder.init(moduleOptions?)`
-- `rawDecoder.readMetadata(rawBuffer, options?)`
-- `rawDecoder.extractThumbnail(rawBuffer, options?)`
-- `rawDecoder.analyze(rawBuffer, options?)`
-- `rawDecoder.readMetadataSafe(...)`
-- `rawDecoder.extractThumbnailSafe(...)`
-- `rawDecoder.runInternal(rawBuffer, internalOptions)`
+- `await rawDecoder.init(moduleOptions?)` — optional; stores module options (e.g. `locateFile`) forwarded to all isolated runs
+- `await rawDecoder.readMetadata(rawBuffer, options?)` — async, isolated runtime per call
+- `await rawDecoder.extractThumbnail(rawBuffer, options?)` — async, isolated runtime per call
+- `await rawDecoder.analyze(rawBuffer, options?)` — async, isolated runtime per call
+- `await rawDecoder.readMetadataSafe(...)` — async safe wrapper
+- `await rawDecoder.extractThumbnailSafe(...)` — async safe wrapper
+- `rawDecoder.runInternal(rawBuffer, internalOptions)` — sync, requires prior `init()`, one-shot/advanced
 
 Browser convenience API (`dcraw-wasm/browser`):
 
@@ -120,12 +121,14 @@ Node convenience API (`dcraw-wasm/node`):
 - `src/lib/dcraw.c` is vendored upstream code and still emits a few compiler warnings under newer toolchains.
 - Buffer-type option mapping object exists but is not currently consumed by `run(...)` argument composition.
 - High optimization levels (`-O2`/`-O3`) are not currently release-safe due to runtime crashes; keep `prod` at `-O1` until root-caused.
+- `runInternal()` on `RawDecoder` requires `init()` and is explicitly one-shot — the underlying `DcrawWasm` instance is reused from `init()` and cannot safely decode more than once. Document this clearly at call sites.
 
 ## Conventions For Future Changes
 
 - Keep public API ergonomics centered on `src/public/*`; keep `src/dcraw-wasm.js` as compatibility/low-level runtime unless intentionally redesigning.
-- Keep wrapper API async init + sync execution model unless intentionally redesigning.
-- Preserve MEMFS lifecycle discipline:
+- Each `RawDecoder` decode method (`readMetadata`, `extractThumbnail`, `analyze`) creates a fresh `DcrawWasm` runtime, uses it once, and discards it. Preserve this isolation discipline.
+- `init()` stores module options used by all isolated runs — if adding new methods that need module options at runtime, always forward `this.moduleOptions`.
+- Preserve MEMFS lifecycle discipline inside `DcrawWasm`:
   - write input file
   - invoke `_runMain`
   - read outputs

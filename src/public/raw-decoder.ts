@@ -1,16 +1,9 @@
 import { parseMetadataText } from './metadata.js';
 import type { AnalyzeOptions, DecodeOptions, ParsedMetadata, SafeResult } from './types.js';
 
-interface DcrawSafeRunResult {
-	ok: boolean;
-	data: string | Uint8Array | null;
-	error: string | null;
-}
-
 interface DcrawWasmRuntime {
 	init(moduleOptions?: Record<string, unknown>): Promise<void>;
 	run(rawFileBuffer: Uint8Array, options?: Record<string, unknown>): string | Uint8Array;
-	runSafe(rawFileBuffer: Uint8Array, options?: Record<string, unknown>): DcrawSafeRunResult;
 }
 
 interface DcrawWasmConstructor {
@@ -66,7 +59,11 @@ function mapDecodeOptions(options: DecodeOptions = {}): Record<string, unknown> 
 }
 
 export class RawDecoder {
+	// Retained for runInternal() only — not required for standard decode methods.
 	private runtime: DcrawWasmRuntime | null = null;
+	// Stored from init() and forwarded to isolated runs (e.g. locateFile for WASM path).
+	private moduleOptions: Record<string, unknown> = {};
+
 	private static async loadInternalRuntime(): Promise<DcrawWasmConstructor> {
 		const candidates = [
 			new URL('../src/dcraw-wasm.js', import.meta.url).href,
@@ -87,7 +84,23 @@ export class RawDecoder {
 		throw new Error('Unable to locate internal runtime module (dcraw-wasm.js).');
 	}
 
+	// Creates a fresh runtime using stored module options, executes one operation,
+	// then discards the runtime. This is the safe execution path — each call is fully isolated.
+	private async runIsolated<T>(operation: (runtime: DcrawWasmRuntime) => T): Promise<T> {
+		const RuntimeClass = await RawDecoder.loadInternalRuntime();
+		const runtime = new RuntimeClass();
+		await runtime.init(this.moduleOptions);
+		return operation(runtime);
+	}
+
+	/**
+	 * Optional warmup step. Initializes and caches a runtime instance for use
+	 * with `runInternal()`. Standard decode methods (`readMetadata`,
+	 * `extractThumbnail`, `analyze`) do not require `init()` — they manage their
+	 * own isolated runtimes internally.
+	 */
 	async init(moduleOptions: Record<string, unknown> = {}): Promise<void> {
+		this.moduleOptions = moduleOptions;
 		if (this.runtime) {
 			return;
 		}
@@ -104,76 +117,65 @@ export class RawDecoder {
 
 	private requireRuntime(): DcrawWasmRuntime {
 		if (!this.runtime) {
-			throw new Error('RawDecoder is not initialized. Call init() before using decode methods.');
+			throw new Error('RawDecoder is not initialized. Call init() before using runInternal().');
 		}
 		return this.runtime;
 	}
 
-	readMetadata(rawBuffer: Uint8Array | ArrayBuffer, options: DecodeOptions = {}): ParsedMetadata {
-		const runtime = this.requireRuntime();
+	async readMetadata(rawBuffer: Uint8Array | ArrayBuffer, options: DecodeOptions = {}): Promise<ParsedMetadata> {
+		const normalized = normalizeRawBuffer(rawBuffer);
 		const runOptions = {
 			...mapDecodeOptions(options),
 			identify: true,
 			verbose: options.verbose ?? true,
 		};
-		const result = runtime.run(normalizeRawBuffer(rawBuffer), runOptions);
-		if (typeof result !== 'string') {
-			throw new Error('Expected metadata output as string, but received binary output.');
-		}
-		return parseMetadataText(result);
-	}
-
-	extractThumbnail(rawBuffer: Uint8Array | ArrayBuffer, options: DecodeOptions = {}): Uint8Array {
-		const runtime = this.requireRuntime();
-		const result = runtime.run(normalizeRawBuffer(rawBuffer), {
-			...mapDecodeOptions(options),
-			extractThumbnail: true,
+		return this.runIsolated((runtime) => {
+			const result = runtime.run(normalized, runOptions);
+			if (typeof result !== 'string') {
+				throw new Error('Expected metadata output as string, but received binary output.');
+			}
+			return parseMetadataText(result);
 		});
-		if (!(result instanceof Uint8Array)) {
-			throw new Error('Expected thumbnail output as Uint8Array, but received text output.');
-		}
-		return result;
 	}
 
-	analyze(
+	async extractThumbnail(rawBuffer: Uint8Array | ArrayBuffer, options: DecodeOptions = {}): Promise<Uint8Array> {
+		const normalized = normalizeRawBuffer(rawBuffer);
+		return this.runIsolated((runtime) => {
+			const result = runtime.run(normalized, {
+				...mapDecodeOptions(options),
+				extractThumbnail: true,
+			});
+			if (!(result instanceof Uint8Array)) {
+				throw new Error('Expected thumbnail output as Uint8Array, but received text output.');
+			}
+			return result;
+		});
+	}
+
+	async analyze(
 		rawBuffer: Uint8Array | ArrayBuffer,
 		options: AnalyzeOptions = {},
-	): {
+	): Promise<{
 		metadata: ParsedMetadata | null;
 		thumbnail: Uint8Array | null;
-	} {
+	}> {
 		const includeMetadata = options.includeMetadata ?? true;
 		const includeThumbnail = options.includeThumbnail ?? true;
 		const normalizedBuffer = normalizeRawBuffer(rawBuffer);
 
 		return {
-			metadata: includeMetadata ? this.readMetadata(normalizedBuffer, options) : null,
-			thumbnail: includeThumbnail ? this.extractThumbnail(normalizedBuffer, options) : null,
+			metadata: includeMetadata ? await this.readMetadata(normalizedBuffer, options) : null,
+			thumbnail: includeThumbnail ? await this.extractThumbnail(normalizedBuffer, options) : null,
 		};
 	}
 
-	readMetadataSafe(rawBuffer: Uint8Array | ArrayBuffer, options: DecodeOptions = {}): SafeResult<ParsedMetadata> {
+	async readMetadataSafe(
+		rawBuffer: Uint8Array | ArrayBuffer,
+		options: DecodeOptions = {},
+	): Promise<SafeResult<ParsedMetadata>> {
 		try {
-			const runtime = this.requireRuntime();
-			const result = runtime.runSafe(normalizeRawBuffer(rawBuffer), {
-				...mapDecodeOptions(options),
-				identify: true,
-				verbose: options.verbose ?? true,
-			});
-
-			if (!result.ok || typeof result.data !== 'string') {
-				return {
-					ok: false,
-					data: null,
-					error: result.error ?? 'Failed to extract metadata.',
-				};
-			}
-
-			return {
-				ok: true,
-				data: parseMetadataText(result.data),
-				error: null,
-			};
+			const metadata = await this.readMetadata(rawBuffer, options);
+			return { ok: true, data: metadata, error: null };
 		} catch (error) {
 			return {
 				ok: false,
@@ -183,27 +185,13 @@ export class RawDecoder {
 		}
 	}
 
-	extractThumbnailSafe(rawBuffer: Uint8Array | ArrayBuffer, options: DecodeOptions = {}): SafeResult<Uint8Array> {
+	async extractThumbnailSafe(
+		rawBuffer: Uint8Array | ArrayBuffer,
+		options: DecodeOptions = {},
+	): Promise<SafeResult<Uint8Array>> {
 		try {
-			const runtime = this.requireRuntime();
-			const result = runtime.runSafe(normalizeRawBuffer(rawBuffer), {
-				...mapDecodeOptions(options),
-				extractThumbnail: true,
-			});
-
-			if (!result.ok || !(result.data instanceof Uint8Array)) {
-				return {
-					ok: false,
-					data: null,
-					error: result.error ?? 'Failed to extract thumbnail.',
-				};
-			}
-
-			return {
-				ok: true,
-				data: result.data,
-				error: null,
-			};
+			const thumbnail = await this.extractThumbnail(rawBuffer, options);
+			return { ok: true, data: thumbnail, error: null };
 		} catch (error) {
 			return {
 				ok: false,
@@ -213,6 +201,12 @@ export class RawDecoder {
 		}
 	}
 
+	/**
+	 * Advanced/low-level escape hatch. Requires a prior `init()` call.
+	 * The underlying runtime instance is one-shot — calling this more than once
+	 * on the same `RawDecoder` instance may produce incorrect results.
+	 * Prefer `readMetadata`, `extractThumbnail`, or `analyze` for safe repeated use.
+	 */
 	runInternal(rawBuffer: Uint8Array | ArrayBuffer, internalOptions: Record<string, unknown>): string | Uint8Array {
 		const runtime = this.requireRuntime();
 		return runtime.run(normalizeRawBuffer(rawBuffer), internalOptions);

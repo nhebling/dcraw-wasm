@@ -21,8 +21,7 @@ before(async () => {
 
 test('extracts typed metadata through RawDecoder', async () => {
 	const rawDecoder = new RawDecoder();
-	await rawDecoder.init();
-	const metadata = rawDecoder.readMetadata(rawBuffer);
+	const metadata = await rawDecoder.readMetadata(rawBuffer);
 	assert.equal(typeof metadata.rawText, 'string');
 	assert.ok(metadata.rawText.trim().length > 0, 'Expected metadata output to be non-empty');
 	assert.ok(metadata.properties.length > 0, 'Expected parsed metadata properties');
@@ -33,10 +32,37 @@ test('extracts typed metadata through RawDecoder', async () => {
 
 test('extracts embedded thumbnail bytes through RawDecoder', async () => {
 	const rawDecoder = new RawDecoder();
-	await rawDecoder.init();
-	const output = rawDecoder.extractThumbnail(rawBuffer);
+	const output = await rawDecoder.extractThumbnail(rawBuffer);
 	assert.ok(output instanceof Uint8Array, 'Expected thumbnail output as Uint8Array');
 	assert.ok(output.length > 0, 'Expected thumbnail output to be non-empty');
+});
+
+test('repeated readMetadata calls on one RawDecoder instance succeed', async () => {
+	const rawDecoder = new RawDecoder();
+	const first = await rawDecoder.readMetadata(rawBuffer);
+	const second = await rawDecoder.readMetadata(rawBuffer);
+	assert.ok(first.properties.length > 0, 'Expected properties on first call');
+	assert.ok(second.properties.length > 0, 'Expected properties on second call');
+	assert.equal(first.propertyMap['camera.model']?.value, second.propertyMap['camera.model']?.value);
+});
+
+test('repeated extractThumbnail calls on one RawDecoder instance succeed', async () => {
+	const rawDecoder = new RawDecoder();
+	const first = await rawDecoder.extractThumbnail(rawBuffer);
+	const second = await rawDecoder.extractThumbnail(rawBuffer);
+	assert.ok(first.length > 0, 'Expected thumbnail bytes on first call');
+	assert.ok(second.length > 0, 'Expected thumbnail bytes on second call');
+	assert.equal(first.length, second.length);
+});
+
+test('analyze returns both metadata and thumbnail across repeated calls', async () => {
+	const rawDecoder = new RawDecoder();
+	const first = await rawDecoder.analyze(rawBuffer);
+	const second = await rawDecoder.analyze(rawBuffer);
+	assert.ok(first.metadata && first.metadata.properties.length > 0, 'Expected metadata on first analyze');
+	assert.ok(first.thumbnail && first.thumbnail.length > 0, 'Expected thumbnail on first analyze');
+	assert.ok(second.metadata && second.metadata.properties.length > 0, 'Expected metadata on second analyze');
+	assert.ok(second.thumbnail && second.thumbnail.length > 0, 'Expected thumbnail on second analyze');
 });
 
 test('analyzeNodeFiles extracts metadata and thumbnail in one high-level call', async () => {
@@ -62,8 +88,7 @@ test('internal low-level class still works', async () => {
 
 test('readMetadataSafe returns a friendly error for missing input', async () => {
 	const rawDecoder = new RawDecoder();
-	await rawDecoder.init();
-	const output = rawDecoder.readMetadataSafe(undefined);
+	const output = await rawDecoder.readMetadataSafe(undefined);
 
 	assert.equal(output.ok, false);
 	assert.equal(output.data, null);
