@@ -3,6 +3,9 @@ name: Deploy Demo to GitHub Pages
 on:
   workflow_dispatch:
 
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
 permissions:
   contents: read
   pages: write
@@ -25,7 +28,7 @@ jobs:
 
       - name: Resolve latest release
         id: latest-release
-        uses: actions/github-script@v7
+        uses: actions/github-script@v8
         with:
           script: |
             try {
