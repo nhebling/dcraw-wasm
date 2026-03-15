@@ -56,6 +56,7 @@
 		"build:wasm:dev": "make dev",
 		"build:wasm:prod": "make prod",
 		"build:api": "tsc -p tsconfig.json",
+		"typecheck": "tsc -p tsconfig.json --noEmit",
 		"prepublishOnly": "npm run build:prod && npm test && npm run test:pack",
 		"start": "npm run build && npm run copy && emrun --browser /usr/bin/open ./demo/index.html",
 		"copy": "npm run copy:module && npm run copy:public-api && npm run copy:bin",
