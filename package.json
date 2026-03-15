@@ -35,7 +35,7 @@
 	"description": "WebAssembly to convert RAW camera images to JPEG",
 	"repository": {
 		"type": "git",
-		"url": "https://github.com/nhebling/dcraw-wasm"
+		"url": "git+https://github.com/nhebling/dcraw-wasm.git"
 	},
 	"homepage": "https://github.com/nhebling/dcraw-wasm#readme",
 	"author": "nhebling",
