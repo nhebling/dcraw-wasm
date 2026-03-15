@@ -1,7 +1,7 @@
 import { promises as fsPromises } from 'node:fs';
 import path from 'node:path';
 
-import { RawDecoder } from './raw-decoder.js';
+import { analyzeBufferIsolated } from './isolated-analysis.js';
 import type { NodeBatchOptions, NodeBatchSummary, NodeFileAnalysisResult } from './types.js';
 
 async function ensureDirectory(dirPath: string): Promise<void> {
@@ -23,9 +23,6 @@ export async function analyzeNodeFiles(filePaths: string[], options: NodeBatchOp
 
 	let cursor = 0;
 	const workers = Array.from({ length: Math.min(concurrency, filePaths.length) }, async () => {
-		const decoder = new RawDecoder();
-		await decoder.init();
-
 		while (true) {
 			const currentIndex = cursor;
 			cursor += 1;
@@ -43,7 +40,7 @@ export async function analyzeNodeFiles(filePaths: string[], options: NodeBatchOp
 
 			try {
 				const fileBytes = new Uint8Array(await fsPromises.readFile(filePath));
-				const analysis = decoder.analyze(fileBytes, options);
+				const analysis = await analyzeBufferIsolated(fileBytes, options);
 				let outputPath: string | undefined;
 				if (options.thumbnailOutputDir && analysis.thumbnail) {
 					outputPath = thumbnailOutputPath(filePath, options.thumbnailOutputDir);

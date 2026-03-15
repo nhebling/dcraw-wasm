@@ -1,4 +1,4 @@
-import { RawDecoder } from './raw-decoder.js';
+import { analyzeBufferIsolated } from './isolated-analysis.js';
 import type { BrowserBatchOptions, FileAnalysisResult } from './types.js';
 
 function toFileArray(files: FileList | File[]): File[] {
@@ -13,8 +13,6 @@ export async function analyzeBrowserFiles(
 	options: BrowserBatchOptions = {},
 ): Promise<FileAnalysisResult[]> {
 	const fileArray = toFileArray(files);
-	const decoder = new RawDecoder();
-	await decoder.init();
 
 	const results: FileAnalysisResult[] = [];
 	for (let index = 0; index < fileArray.length; index += 1) {
@@ -28,7 +26,7 @@ export async function analyzeBrowserFiles(
 
 		try {
 			const bytes = new Uint8Array(await file.arrayBuffer());
-			const analysis = decoder.analyze(bytes, options);
+			const analysis = await analyzeBufferIsolated(bytes, options);
 			results.push({
 				fileName: file.name,
 				metadata: analysis.metadata,
