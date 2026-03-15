@@ -40,30 +40,49 @@ for (const result of results) {
 }
 ```
 
-If your bundler or hosting setup serves static assets from a custom path, use `locateFile` to point to `dcraw.wasm`.
+## Quick Start (RawDecoder direct)
+
+```js
+import { RawDecoder } from 'dcraw-wasm';
+
+const decoder = new RawDecoder();
+
+// Each method creates its own isolated runtime — safe to call repeatedly.
+const metadata = await decoder.readMetadata(rawBuffer);
+const thumbnail = await decoder.extractThumbnail(rawBuffer);
+
+console.log(metadata.propertyMap['camera.model']?.value);
+```
+
+If your bundler or hosting setup serves static assets from a custom path, use `locateFile` to point to `dcraw.wasm`:
+
+```js
+const decoder = new RawDecoder();
+await decoder.init({ locateFile: (path) => `/static/wasm/${path}` });
+
+const metadata = await decoder.readMetadata(rawBuffer);
+```
 
 ## API
 
 ### `new RawDecoder()`
 
-Creates the advanced decoder facade with full control.
+Creates the advanced decoder facade with full control. No initialization step is required before calling decode methods.
 
 ### `await init(moduleOptions?)`
 
-Initializes the Emscripten module.
-
-- `moduleOptions` is optional and forwarded to the Emscripten module factory.
-- Most useful option for consumers is `locateFile`.
-
-Example:
+Optional warmup step. Stores module options (e.g. `locateFile`) that are forwarded to all isolated runtime instances created by subsequent decode calls. Call this before any decode method when you need to customize the WASM module (e.g. custom WASM asset path):
 
 ```js
+const decoder = new RawDecoder();
 await decoder.init({
 	locateFile: (path) => `/static/wasm/${path}`,
 });
 ```
 
-### `readMetadata(rawFileBuffer, options?)`
+If the default WASM resolution works for your environment, `init()` can be omitted entirely.
+
+### `await readMetadata(rawFileBuffer, options?)`
 
 Extracts metadata and returns both raw text and typed metadata properties:
 
@@ -76,11 +95,13 @@ type ParsedMetadata = {
 };
 ```
 
-### `extractThumbnail(rawFileBuffer, options?)`
+Each call to `readMetadata` on the same instance is isolated and safe to repeat.
 
-Extracts embedded thumbnail and returns `Uint8Array`.
+### `await extractThumbnail(rawFileBuffer, options?)`
 
-### `analyze(rawFileBuffer, options?)`
+Extracts embedded thumbnail and returns `Uint8Array`. Each call is isolated.
+
+### `await analyze(rawFileBuffer, options?)`
 
 Runs metadata and thumbnail extraction in one call and returns:
 
@@ -91,13 +112,13 @@ Runs metadata and thumbnail extraction in one call and returns:
 }
 ```
 
-### `readMetadataSafe(...)` and `extractThumbnailSafe(...)`
+### `await readMetadataSafe(...)` and `await extractThumbnailSafe(...)`
 
-Safe wrappers that return `{ ok, data, error }`.
+Async safe wrappers that return `{ ok, data, error }`.
 
 ### `runInternal(rawFileBuffer, internalOptions)`
 
-Escape hatch for direct low-level option usage.
+Escape hatch for direct low-level option usage. Requires a prior `init()` call. The underlying runtime is one-shot — calling `runInternal` more than once on the same `RawDecoder` instance may produce incorrect results. Prefer the standard async methods for safe repeated use.
 
 ## Typed Metadata Model
 
@@ -154,9 +175,7 @@ The original low-level class is still available as an internal surface:
 import { DcrawWasm } from 'dcraw-wasm/internal';
 ```
 
-Most consumers should use `RawDecoder` and convenience APIs; this path is for low-level control.
-
-Current runtime limitation: the underlying `DcrawWasm` WebAssembly runtime should be treated as single-use per initialized instance. Repeated decode calls on the same low-level instance may fail with `RuntimeError: memory access out of bounds`. The browser and Node convenience helpers avoid this by isolating decode operations with fresh decoder instances.
+Most consumers should use `RawDecoder` and convenience APIs; this path is for low-level control. The underlying `DcrawWasm` instance should be treated as single-use per initialized instance — repeated decode calls on the same low-level instance may fail with `RuntimeError: memory access out of bounds`. `RawDecoder` and the convenience helpers avoid this entirely by isolating each operation in a fresh runtime.
 
 ## Low-Level Option Examples
 

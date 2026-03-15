@@ -93,13 +93,9 @@
 				document.getElementById('messages').innerHTML = '';
 				try {
 					var bytes = new Uint8Array(await file.arrayBuffer());
-					var metadataDecoder = new RawDecoder();
-					await metadataDecoder.init();
-					var metadata = metadataDecoder.readMetadata(bytes, { verbose: true });
-
-					var thumbnailDecoder = new RawDecoder();
-					await thumbnailDecoder.init();
-					var thumbnail = thumbnailDecoder.extractThumbnail(bytes);
+					var decoder = new RawDecoder();
+					var metadata = await decoder.readMetadata(bytes, { verbose: true });
+					var thumbnail = await decoder.extractThumbnail(bytes);
 					createCard(file.name, metadata, thumbnail);
 				} catch (error) {
 					showMessage('message-error', error && error.message ? error.message : String(error));
