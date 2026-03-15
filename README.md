@@ -156,6 +156,8 @@ import { DcrawWasm } from 'dcraw-wasm/internal';
 
 Most consumers should use `RawDecoder` and convenience APIs; this path is for low-level control.
 
+Current runtime limitation: the underlying `DcrawWasm` WebAssembly runtime should be treated as single-use per initialized instance. Repeated decode calls on the same low-level instance may fail with `RuntimeError: memory access out of bounds`. The browser and Node convenience helpers avoid this by isolating decode operations with fresh decoder instances.
+
 ## Low-Level Option Examples
 
 Common low-level flags mapped by the internal runtime include:

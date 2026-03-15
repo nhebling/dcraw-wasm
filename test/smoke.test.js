@@ -5,6 +5,7 @@ import test, { before } from 'node:test';
 import { fileURLToPath } from 'node:url';
 
 import { RawDecoder } from '../dist/index.js';
+import { analyzeNodeFiles } from '../dist/node.js';
 import { DcrawWasm } from '../src/dcraw-wasm.js';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -36,6 +37,19 @@ test('extracts embedded thumbnail bytes through RawDecoder', async () => {
 	const output = rawDecoder.extractThumbnail(rawBuffer);
 	assert.ok(output instanceof Uint8Array, 'Expected thumbnail output as Uint8Array');
 	assert.ok(output.length > 0, 'Expected thumbnail output to be non-empty');
+});
+
+test('analyzeNodeFiles extracts metadata and thumbnail in one high-level call', async () => {
+	const summary = await analyzeNodeFiles([fixturePath], {
+		includeMetadata: true,
+		includeThumbnail: true,
+	});
+
+	assert.equal(summary.failed, 0);
+	assert.equal(summary.succeeded, 1);
+	assert.ok(summary.results[0].metadata, 'Expected metadata to be present');
+	assert.ok(summary.results[0].thumbnail instanceof Uint8Array, 'Expected thumbnail bytes to be present');
+	assert.ok(summary.results[0].thumbnail.length > 0, 'Expected thumbnail output to be non-empty');
 });
 
 test('internal low-level class still works', async () => {

@@ -26,9 +26,6 @@
 		<script type="module">
 			import { RawDecoder } from '../public-api/index.js';
 
-			var decoder = new RawDecoder();
-			await decoder.init();
-
 			function preventDefaultDragBehavior(evt) {
 				evt.preventDefault();
 				evt.stopPropagation();
@@ -96,8 +93,13 @@
 				document.getElementById('messages').innerHTML = '';
 				try {
 					var bytes = new Uint8Array(await file.arrayBuffer());
-					var metadata = decoder.readMetadata(bytes, { verbose: true });
-					var thumbnail = decoder.extractThumbnail(bytes);
+					var metadataDecoder = new RawDecoder();
+					await metadataDecoder.init();
+					var metadata = metadataDecoder.readMetadata(bytes, { verbose: true });
+
+					var thumbnailDecoder = new RawDecoder();
+					await thumbnailDecoder.init();
+					var thumbnail = thumbnailDecoder.extractThumbnail(bytes);
 					createCard(file.name, metadata, thumbnail);
 				} catch (error) {
 					showMessage('message-error', error && error.message ? error.message : String(error));
