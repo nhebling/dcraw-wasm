@@ -1,14 +1,44 @@
 {
 	"name": "dcraw-wasm",
 	"version": "0.0.1",
-	"private": true,
-	"description": "WebAssembly to convert RAW camera images",
+	"private": false,
+	"type": "module",
+	"main": "./dist/index.js",
+	"types": "./dist/index.d.ts",
+	"exports": {
+		".": {
+			"types": "./dist/index.d.ts",
+			"import": "./dist/index.js"
+		},
+		"./browser": {
+			"types": "./dist/browser.d.ts",
+			"import": "./dist/browser.js"
+		},
+		"./node": {
+			"types": "./dist/node.d.ts",
+			"import": "./dist/node.js"
+		},
+		"./internal": "./src/dcraw-wasm.js"
+	},
+	"files": [
+		"dist/**/*.js",
+		"dist/**/*.d.ts",
+		"src/dcraw-wasm.js",
+		"bin/dcraw.js",
+		"bin/dcraw.wasm",
+		"README.md",
+		"LICENSE"
+	],
+	"publishConfig": {
+		"access": "public"
+	},
+	"description": "WebAssembly to convert RAW camera images to JPEG",
 	"repository": {
 		"type": "git",
 		"url": "https://github.com/nhebling/dcraw-wasm"
 	},
 	"homepage": "https://github.com/nhebling/dcraw-wasm#readme",
-	"author": "Niels Hebling",
+	"author": "nhebling",
 	"license": "SEE LICENSE IN LICENSE",
 	"keywords": [
 		"wasm",
@@ -20,18 +50,30 @@
 		"dslm"
 	],
 	"scripts": {
-		"build": "make all",
-		"start": "npm run copy && emrun --browser open ./demo/index.html",
-		"copy": "npm run copy:module && npm run copy:bin",
+		"build": "npm run build:wasm:dev && npm run build:api",
+		"build:dev": "npm run build",
+		"build:prod": "npm run build:wasm:prod && npm run build:api",
+		"build:wasm:dev": "make dev",
+		"build:wasm:prod": "make prod",
+		"build:api": "tsc -p tsconfig.json",
+		"prepublishOnly": "npm run build:prod && npm test && npm run test:pack",
+		"start": "npm run build && npm run copy && emrun --browser /usr/bin/open ./demo/index.html",
+		"copy": "npm run copy:module && npm run copy:public-api && npm run copy:bin",
 		"copy:bin": "mkdir -p ./demo/bin && cp -R ./bin/* ./demo/bin/",
 		"copy:module": "mkdir -p ./demo && cp -R ./src/dcraw-wasm.js ./demo/",
-		"lint": "eslint ."
+		"copy:public-api": "mkdir -p ./demo/public-api && cp -R ./dist/* ./demo/public-api/",
+		"demo:node": "npm run build && node demo/node/batch-example.js",
+		"lint": "eslint .",
+		"test": "npm run build:prod && npm run copy && node test/download-fixture.js && node --test test/smoke.test.js test/metadata-parser.test.js",
+		"test:pack": "node test/integration-pack.test.js"
 	},
 	"devDependencies": {
-		"eslint": "^8.38.0",
-		"eslint-config-prettier": "^8.8.0",
-		"eslint-plugin-prettier": "^4.2.1",
-		"prettier": "^2.8.7",
-		"rimraf": "^4.4.1"
+		"@eslint/js": "^9.39.1",
+		"@types/node": "^24.7.2",
+		"eslint": "^9.39.4",
+		"eslint-config-prettier": "^9.1.0",
+		"globals": "^16.4.0",
+		"prettier": "^3.8.1",
+		"typescript": "^5.9.3"
 	}
 }

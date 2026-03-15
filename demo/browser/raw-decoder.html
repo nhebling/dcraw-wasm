@@ -1,0 +1,125 @@
+<!doctype html>
+<html lang="en">
+	<head>
+		<meta charset="UTF-8" />
+		<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+		<title>dcraw-wasm RawDecoder Demo</title>
+		<link rel="icon" href="data:," />
+		<link rel="stylesheet" href="./styles.css" />
+	</head>
+	<body>
+		<div class="page">
+			<div class="page-header">
+				<h1>RawDecoder API Demo</h1>
+				<a href="../index.html">Back to demo index</a>
+			</div>
+
+			<div class="drop-area" id="drop">
+				<h5>Drop a RAW file here (or pick one)</h5>
+				<input type="file" id="file" name="file" />
+			</div>
+
+			<div id="messages" class="message-area"></div>
+			<div id="list" class="demo-grid"></div>
+		</div>
+
+		<script type="module">
+			import { RawDecoder } from '../public-api/index.js';
+
+			var decoder = new RawDecoder();
+			await decoder.init();
+
+			function preventDefaultDragBehavior(evt) {
+				evt.preventDefault();
+				evt.stopPropagation();
+			}
+
+			function showMessage(className, message) {
+				var messageContainer = document.getElementById('messages');
+				var messageElement = document.createElement('div');
+				messageElement.className = className;
+				messageElement.textContent = message;
+				messageContainer.appendChild(messageElement);
+			}
+
+			function createCard(fileName, metadata, thumbnailBytes) {
+				var listContainer = document.getElementById('list');
+				listContainer.innerHTML = '';
+
+				var card = document.createElement('div');
+				card.className = 'demo-card';
+
+				var titleWrap = document.createElement('div');
+				titleWrap.className = 'demo-card-title';
+				titleWrap.textContent = fileName;
+
+				var media = document.createElement('div');
+				media.className = 'demo-card-media';
+				var img = document.createElement('img');
+				img.className = 'thumbnail';
+				media.appendChild(img);
+
+				if (thumbnailBytes && thumbnailBytes.length > 0) {
+					var blob = new Blob([thumbnailBytes], { type: 'image/jpeg' });
+					var imageUrl = URL.createObjectURL(blob);
+					img.onload = function () {
+						URL.revokeObjectURL(imageUrl);
+					};
+					img.src = imageUrl;
+				}
+
+				var content = document.createElement('div');
+				content.className = 'demo-card-content';
+				var metadataList = document.createElement('ul');
+				metadata.lines.forEach(function (line) {
+					var item = document.createElement('li');
+					item.textContent = line;
+					metadataList.appendChild(item);
+				});
+				content.appendChild(metadataList);
+
+				card.appendChild(titleWrap);
+				card.appendChild(media);
+				card.appendChild(content);
+				listContainer.appendChild(card);
+			}
+
+			document.getElementById('file').addEventListener('change', async function (evt) {
+				var file = evt.target.files && evt.target.files[0];
+				if (!file) {
+					return;
+				}
+				await processFile(file);
+			});
+
+			async function processFile(file) {
+				document.getElementById('messages').innerHTML = '';
+				try {
+					var bytes = new Uint8Array(await file.arrayBuffer());
+					var metadata = decoder.readMetadata(bytes, { verbose: true });
+					var thumbnail = decoder.extractThumbnail(bytes);
+					createCard(file.name, metadata, thumbnail);
+				} catch (error) {
+					showMessage('message-error', error && error.message ? error.message : String(error));
+				}
+			}
+
+			var dropZone = document.getElementById('drop');
+			dropZone.addEventListener('dragover', function (evt) {
+				preventDefaultDragBehavior(evt);
+				evt.dataTransfer.dropEffect = 'copy';
+			});
+			dropZone.addEventListener('drop', async function (evt) {
+				preventDefaultDragBehavior(evt);
+				var file = evt.dataTransfer && evt.dataTransfer.files && evt.dataTransfer.files[0];
+				if (!file) {
+					return;
+				}
+				await processFile(file);
+			});
+
+			window.addEventListener('dragover', preventDefaultDragBehavior, false);
+			window.addEventListener('drop', preventDefaultDragBehavior, false);
+		</script>
+	</body>
+</html>

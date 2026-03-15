@@ -1,19 +1,27 @@
 # Emscripten compiler
 EMCC = emcc
 
-# Compiler flags
-EMFLAGS = -O0 \
-          -s ALLOW_MEMORY_GROWTH=1 \
-          -s TOTAL_MEMORY=134217728 \
-          -s NO_EXIT_RUNTIME=1 \
-          -s FORCE_FILESYSTEM=1 \
-          --memory-init-file 0 \
-		  -s MODULARIZE=1 \
-          -s WASM=1 \
-		  -s EXPORT_ES6=1 \
-          -s EXPORTED_FUNCTIONS="['_main']" \
-		  -s EXPORTED_RUNTIME_METHODS=intArrayFromString,allocate,ALLOC_NORMAL \
-		  -DNODEPS=1
+# Shared compiler flags
+EMFLAGS_COMMON = -s ALLOW_MEMORY_GROWTH=1 \
+				 -s INITIAL_MEMORY=134217728 \
+				 -s NO_EXIT_RUNTIME=1 \
+				 -s FORCE_FILESYSTEM=1 \
+				 -s MODULARIZE=1 \
+				 -s WASM=1 \
+				 -s EXPORT_ES6=1 \
+				 -s EXPORTED_FUNCTIONS="['_runMain','_malloc','_free']" \
+				 -s EXPORTED_RUNTIME_METHODS=FS,setValue,stringToUTF8,stackAlloc,stackSave,stackRestore,intArrayFromString \
+				 -DNODEPS=1 \
+				 -Dmain=runMain
+
+# Dev profile: debug-friendly build with sanitizer checks.
+EMFLAGS_DEV = -O0 \
+			  -s ASSERTIONS=1 \
+			  -fsanitize=address
+
+# Prod profile: optimized output for size/performance.
+EMFLAGS_PROD = -O1 \
+			   -s ASSERTIONS=0
 
 # Source files
 SRC = ./src/lib/dcraw.c
@@ -30,10 +38,13 @@ prepare:
 	mkdir -p $(OUTPUT_DIR)
 
 # Build rules
-all: prepare $(OUTPUT_FILE)
+all: dev
 
-$(OUTPUT_FILE): $(SRC)
-	$(EMCC) $(SRC) -o $(OUTPUT_FILE) $(EMFLAGS)  
+dev: prepare
+	$(EMCC) $(SRC) -o $(OUTPUT_FILE) $(EMFLAGS_COMMON) $(EMFLAGS_DEV)
+
+prod: prepare
+	$(EMCC) $(SRC) -o $(OUTPUT_FILE) $(EMFLAGS_COMMON) $(EMFLAGS_PROD)
 
 clean:
 	rm -rf $(OUTPUT_DIR)

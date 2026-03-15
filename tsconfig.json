@@ -1,0 +1,19 @@
+{
+	"compilerOptions": {
+		"target": "ES2022",
+		"module": "NodeNext",
+		"moduleResolution": "NodeNext",
+		"lib": ["ES2022", "DOM", "DOM.Iterable"],
+		"declaration": true,
+		"declarationMap": false,
+		"outDir": "dist",
+		"rootDir": "src/public",
+		"strict": true,
+		"noEmitOnError": true,
+		"skipLibCheck": true,
+		"verbatimModuleSyntax": true,
+		"resolveJsonModule": true,
+		"types": ["node"]
+	},
+	"include": ["src/public/**/*.ts"]
+}

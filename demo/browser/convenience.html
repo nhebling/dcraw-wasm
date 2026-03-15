@@ -1,0 +1,122 @@
+<!doctype html>
+<html lang="en">
+	<head>
+		<meta charset="UTF-8" />
+		<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+		<title>dcraw-wasm Browser Convenience Demo</title>
+		<link rel="icon" href="data:," />
+		<link rel="stylesheet" href="./styles.css" />
+	</head>
+	<body>
+		<div class="page">
+			<div class="page-header">
+				<h1>Browser Convenience API Demo</h1>
+				<a href="../index.html">Back to demo index</a>
+			</div>
+
+			<div class="drop-area" id="drop">
+				<h5>Drop RAW files here</h5>
+				<input type="file" id="files" name="files[]" multiple />
+			</div>
+
+			<div id="messages" class="message-area"></div>
+			<div id="list" class="demo-grid"></div>
+		</div>
+
+		<script type="module">
+			import { analyzeBrowserFiles } from '../public-api/browser.js';
+
+			function showMessage(className, fileName, message) {
+				var messageContainer = document.getElementById('messages');
+				var messageElement = document.createElement('div');
+				messageElement.className = className;
+				messageElement.textContent = fileName + ': ' + message;
+				messageContainer.appendChild(messageElement);
+			}
+
+			function createResultCard(result) {
+				var metadataLines = result.metadata ? result.metadata.lines : [];
+				var id = btoa(result.fileName).replace(/=/g, '');
+				var listContainer = document.getElementById('list');
+				var card = document.createElement('div');
+				card.className = 'demo-card';
+
+				var titleWrap = document.createElement('div');
+				titleWrap.className = 'demo-card-title';
+				titleWrap.textContent = result.fileName;
+
+				var media = document.createElement('div');
+				media.className = 'demo-card-media';
+				var img = document.createElement('img');
+				img.className = 'thumbnail';
+				img.id = 'thumb-' + id;
+				media.appendChild(img);
+
+				var supportingText = document.createElement('div');
+				supportingText.className = 'demo-card-content';
+				var metadataList = document.createElement('ul');
+				metadataLines.forEach(function (line) {
+					var item = document.createElement('li');
+					item.textContent = line;
+					metadataList.appendChild(item);
+				});
+				supportingText.appendChild(metadataList);
+
+				card.appendChild(titleWrap);
+				card.appendChild(media);
+				card.appendChild(supportingText);
+				listContainer.appendChild(card);
+
+				if (result.thumbnail) {
+					var blob = new Blob([result.thumbnail], { type: 'image/jpeg' });
+					var urlCreator = window.URL || window.webkitURL;
+					var imageUrl = urlCreator.createObjectURL(blob);
+					img.onload = function () {
+						urlCreator.revokeObjectURL(imageUrl);
+					};
+					img.src = imageUrl;
+				}
+			}
+
+			async function handleFileSelect(evt) {
+				evt.stopPropagation();
+				evt.preventDefault();
+				document.getElementById('messages').innerHTML = '';
+				document.getElementById('list').innerHTML = '';
+
+				var files;
+				try {
+					files = evt.dataTransfer.files;
+				} catch {
+					files = evt.target.files;
+				}
+
+				var analysisResults = await analyzeBrowserFiles(files, {
+					includeMetadata: true,
+					includeThumbnail: true,
+				});
+
+				analysisResults.forEach(function (result) {
+					if (result.error) {
+						showMessage('message-error', result.fileName, result.error);
+						return;
+					}
+					createResultCard(result);
+				});
+			}
+
+			function handleDragOver(evt) {
+				evt.stopPropagation();
+				evt.preventDefault();
+				evt.dataTransfer.dropEffect = 'copy';
+			}
+
+			var dropZone = document.getElementById('drop');
+			dropZone.addEventListener('dragover', handleDragOver, false);
+			dropZone.addEventListener('drop', handleFileSelect, false);
+
+			var fileInput = document.getElementById('files');
+			fileInput.addEventListener('change', handleFileSelect, false);
+		</script>
+	</body>
+</html>
