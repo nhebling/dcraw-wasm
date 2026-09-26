@@ -61,8 +61,8 @@ jobs:
         shell: bash
         run: |
           git clone --depth=1 https://github.com/emscripten-core/emsdk.git "$HOME/emsdk"
-          "$HOME/emsdk/emsdk" install latest
-          "$HOME/emsdk/emsdk" activate latest
+          "$HOME/emsdk/emsdk" install "$(cat .emscripten-version)"
+          "$HOME/emsdk/emsdk" activate "$(cat .emscripten-version)"
           echo "$HOME/emsdk" >> "$GITHUB_PATH"
           echo "$HOME/emsdk/upstream/emscripten" >> "$GITHUB_PATH"
 

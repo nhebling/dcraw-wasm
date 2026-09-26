@@ -53,11 +53,19 @@
   - Installs tarball in a temp sandbox and validates one metadata decode.
 - Publish gate: `npm run prepublishOnly`
   - Runs `build:prod`, `test`, and `test:pack`.
+- Release: `npm run release -- <patch|minor|major|x.y.z>` (`scripts/release.sh`)
+  - Releases are built and published locally, never from CI.
+  - Refuses to run on a dirty tree, off `main`, out of sync with `origin/main`, or with `emcc` not matching `.emscripten-version`.
+  - Bumps + commits + tags locally (no `v` tag prefix), runs `npm publish` (which runs `prepublishOnly`), then pushes and creates the GitHub release from the matching `CHANGELOG.md` section.
+  - Requires a `## [x.y.z]` section in `CHANGELOG.md` before releasing.
 
 ## Important Files
 
 - `package.json`: npm scripts, dependency metadata.
-- `makefile`: Emscripten dev/prod flag profiles, exported symbols, build targets.
+- `makefile`: Emscripten dev/prod flag profiles, exported symbols, build targets, version check, `bin/build-info.json` generation.
+- `.emscripten-version`: pinned Emscripten version (single source of truth for local builds, CI, and releases).
+- `scripts/release.sh`: local release script behind `npm run release`.
+- `CHANGELOG.md`: release notes (Keep a Changelog format).
 - `src/public/raw-decoder.ts`: typed advanced facade (`RawDecoder`) bridging into internal runtime.
 - `src/public/metadata.ts`: typed metadata normalization.
 - `src/public/browser.ts`: browser convenience API helpers.
@@ -108,6 +116,12 @@ Node convenience API (`dcraw-wasm/node`):
 - Buffer-type mapping object exists in source but is not currently wired into `run(...)` argument composition.
 
 ## Build Profile Notes
+
+- Emscripten is pinned to one exact version in `.emscripten-version`. CI installs that version via emsdk; the maintainer uses Homebrew with `brew pin emscripten`.
+  - `make` only warns on a mismatch (installed version is normalized to `x.y.z`, so Homebrew's `-git` suffix matches); `npm run release` fails on a mismatch.
+  - Bump the pin in its own commit, only after `build:prod`, `test`, and `test:pack` pass with the new version.
+- Every `make dev`/`make prod` writes `bin/build-info.json` (`emscripten`, `profile`, `commit`, `dirty`). It is listed in `package.json` `files` and ships in the tarball. Do not add timestamps or host info (keeps identical builds identical).
+- `make` with no target runs `all` -> `dev`.
 
 - `make all` aliases to `make dev`.
 - `dev` profile keeps debug ergonomics (`-O0`, assertions enabled, address sanitizer).

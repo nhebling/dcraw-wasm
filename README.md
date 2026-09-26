@@ -195,11 +195,30 @@ Instructions are explained for macOS; other platforms may vary. Some additional 
 
 ### Prepare (Required tools)
 
-Install [emscripten](https://emscripten.org/):
+Install [emscripten](https://emscripten.org/). The build uses one exact Emscripten version, pinned in [`.emscripten-version`](.emscripten-version). Use that version for local builds, because npm releases are built locally.
+
+**macOS (Homebrew):**
 
 ```bash
 brew install emscripten
+brew pin emscripten    # keep `brew upgrade` from moving off the pinned version
+emcc --version         # must match .emscripten-version
 ```
+
+Homebrew only provides its current formula version. If that no longer matches `.emscripten-version`, use emsdk instead.
+
+**Any OS, or a specific or older version (emsdk):**
+
+```bash
+git clone https://github.com/emscripten-core/emsdk.git ~/emsdk
+~/emsdk/emsdk install "$(cat .emscripten-version)"
+~/emsdk/emsdk activate "$(cat .emscripten-version)"
+source ~/emsdk/emsdk_env.sh   # add to your shell profile to make it permanent
+```
+
+Tested on macOS. CI uses emsdk on Linux.
+
+**Changing the pinned version:** update `.emscripten-version`, verify with `npm run build:prod`, `npm test` and `npm run test:pack`, then commit the version change on its own. With Homebrew: `brew unpin emscripten && brew upgrade emscripten && brew pin emscripten`.
 
 ### Build
 
@@ -250,6 +269,26 @@ npm run test:pack
 ```
 
 This packs the module, installs the tarball in a temporary sandbox, and runs one decode.
+
+### Release
+
+Releases are built and published locally with the release script:
+
+```bash
+git status                       # must be clean: commit everything first
+npm run release -- patch         # or minor, major, or an exact version like 0.0.4
+```
+
+The script:
+
+1. Checks that the working tree is clean, `main` matches `origin/main`, `emcc` matches `.emscripten-version`, you are logged in to npm, the tag does not exist yet, and `CHANGELOG.md` has a section for the version.
+2. Asks for confirmation.
+3. Bumps the version, commits and tags it locally (tags have no `v` prefix). If `package.json` already has the version, it only creates the tag.
+4. Runs `npm publish`, which runs `prepublishOnly` (`build:prod`, `test`, `test:pack`). If this fails, nothing has been pushed and the script prints how to undo the local commit and tag.
+5. Pushes the commit and tag.
+6. Creates the GitHub release from the version's `CHANGELOG.md` section (requires the [`gh` CLI](https://cli.github.com/); otherwise it prints a link to create it manually).
+
+Each build writes `bin/build-info.json` with the Emscripten version, build profile, git commit and a `dirty` flag (uncommitted changes at build time). It ships in the npm package. Releases made with the script always record `"dirty": false`. A plain `npm publish` skips these checks.
 
 ## Motivation
 
